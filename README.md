@@ -46,7 +46,14 @@ npm run preview -- --port 4173
 
 邮箱为 `songpeien@163.com`。模型从本地项目加载，约 106 MB，首次打开需要等待加载。邮箱复制应通过 localhost 或 HTTPS 使用。
 
-该项目仅在本地预览，没有配置 GitHub Pages 或自动部署。
+## Cloudflare Pages 无损分块部署
 
+无需 R2 或额外环境变量。保留生产分支 main、构建命令 npm run build、输出目录 dist。
+
+构建时自动将实际使用的 character-rigged.glb 按字节拆为 6 个分块，每块不超过 20 MiB，同时生成清单和 SHA-256 校验值。不会发布两个完整 GLB。浏览器顺序下载、校验并还原原始字节，再使用原 GLTFLoader 解析；模型材质、纹理、骨骼、姿态与跟随逻辑不变。内容哈希文件名避免旧缓存混入新模型。
+
+本地开发仍直接读取原 GLB。首次线上加载仍需下载约 106 MB，并占用模型缓冲区内存；分块不等于压缩。卸载组件时中止下载。Git LFS 必须正确拉取模型，否则构建会明确失败。
+
+构建后运行 node --test tools/model-chunks.test.mjs，验证真实 HTTP 加载后与原模型 SHA-256 完全相同，并检查损坏分块和取消下载的处理。
 
 鼠标灵敏度、死区、各部位时间常数、回正速度和最大角度集中在 `src/character-motion.mjs` 的 `FOLLOW_CONFIG`。响应测试记录见 `FOLLOW-TUNING.md`。页面默认不显示调试面板。

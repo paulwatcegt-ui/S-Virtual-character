@@ -7,3 +7,6 @@ verification/
 pnpm-workspace.yaml
 启动调试.cmd
 tools/__pycache__/
+.env
+.env.local
+.env.*.local

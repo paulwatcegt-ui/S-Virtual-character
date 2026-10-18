@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {FOLLOW_CONFIG, targetAngles} from './character-motion.mjs';
 import {createHeadRig, updateHeadRig} from './character-rig.mjs';
+import {loadModelChunks} from './model-chunks.mjs';
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/character-rigged.glb`;
 
@@ -104,7 +105,13 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
       skeletons.forEach(value => value.dispose());
     }
 
-    new GLTFLoader().load(MODEL_URL, gltf => {
+    const download = new AbortController();
+    const loader = new GLTFLoader();
+    const loading = import.meta.env.PROD
+      ? loadModelChunks(new URL(`${import.meta.env.BASE_URL}models/character.json`, window.location.href).href, download.signal)
+        .then(data => { download.signal.throwIfAborted(); return loader.parseAsync(data, ''); })
+      : loader.loadAsync(MODEL_URL);
+    loading.then(gltf => {
       if (disposed) {release(gltf.scene); return;}
       model = gltf.scene;
       scene.add(model);
@@ -124,7 +131,7 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
       }
       container.dataset.status = 'ready';
       resize();
-    }, undefined, error => {
+    }).catch(error => {
       if (!disposed) {
         container.dataset.status = 'error';
         setFailed(true);
@@ -162,6 +169,7 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
 
     return () => {
       disposed = true;
+      download.abort();
       renderer.setAnimationLoop(null);
       observer.disconnect();
       window.removeEventListener('mousemove', pointer);
