@@ -2,3 +2,8 @@ node_modules/
 dist/
 .sites-runtime/
 *.tar.gz
+verification/
+*.log
+pnpm-workspace.yaml
+启动调试.cmd
+tools/__pycache__/

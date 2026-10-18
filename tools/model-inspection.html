@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="UTF-8"><style>body{margin:0;background:#222;color:white;font:16px sans-serif}#labels{position:fixed;top:0;display:flex;width:100%}#labels span{width:25%;text-align:center}canvas{display:block}</style></head><body><div id="labels"><span>part_0</span><span>part_1</span><span>part_2</span><span>part_3</span></div><script type="module">
+import * as THREE from '/node_modules/three/build/three.module.js';
+import {GLTFLoader} from '/node_modules/three/examples/jsm/loaders/GLTFLoader.js';
+import {createHeadRig,applyHeadPose} from '/src/character-rig.mjs';
+import {LIMITS} from '/src/character-motion.mjs';
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setScissorTest(true);document.body.append(renderer.domElement);
+const params=new URLSearchParams(location.search);
+const pose=params.get('pose');
+const gltf=await new GLTFLoader().loadAsync(pose?'/models/character-rigged.glb':'/models/character.glb');
+const scenes=[];
+if(pose){
+ document.querySelector('#labels').textContent='Neck pivot verification: '+pose;
+ const scene=new THREE.Scene();scene.background=new THREE.Color('#303531');scene.add(gltf.scene);const rig=createHeadRig(gltf.scene);applyHeadPose(rig,pose.includes('left')?-LIMITS.yaw:pose.includes('right')?LIMITS.yaw:0,pose.includes('up')?-LIMITS.pitch:pose.includes('down')?LIMITS.pitch:0,params.get('eyes')==='left'?-LIMITS.eyeYaw:params.get('eyes')==='right'?LIMITS.eyeYaw:0,params.get('eyes')==='up'?-LIMITS.eyePitch:params.get('eyes')==='down'?LIMITS.eyePitch:0);scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2));const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(-2,3,4);scene.add(light);const h=params.get('close')==='eyes'?.16:params.get('close')==='neck'?.27:.94,focus=params.get('close')==='eyes'?.516:params.get('close')==='neck'?.31:.42,a=innerWidth/innerHeight,camera=new THREE.OrthographicCamera(-h*a/2,h*a/2,h/2,-h/2,.001,100);camera.position.set(0,focus,3);camera.lookAt(0,focus,0);renderer.setScissorTest(false);renderer.setAnimationLoop(()=>renderer.render(scene,camera));
+} else {
+for(let i=0;i<4;i++){
+ const scene=new THREE.Scene();scene.background=new THREE.Color('#303531');const mesh=gltf.scene.getObjectByName('part_'+i).clone();scene.add(mesh);scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2));const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(-2,3,4);scene.add(light);
+ const box=new THREE.Box3().setFromObject(mesh),center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());const aspect=innerWidth/4/innerHeight,h=Math.max(size.y*1.2,size.x/aspect*1.2);const camera=new THREE.OrthographicCamera(-h*aspect/2,h*aspect/2,h/2,-h/2,.001,100);camera.position.copy(center).add(new THREE.Vector3(0,0,3));camera.lookAt(center);scenes.push({scene,camera});
+}
+renderer.setAnimationLoop(()=>scenes.forEach(({scene,camera},i)=>{renderer.setViewport(i*innerWidth/4,0,innerWidth/4,innerHeight);renderer.setScissor(i*innerWidth/4,0,innerWidth/4,innerHeight);renderer.render(scene,camera);}));
+}
+</script></body></html>
