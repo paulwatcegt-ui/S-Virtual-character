@@ -9,6 +9,7 @@ const MODEL_URL = `${import.meta.env.BASE_URL}models/character-rigged.glb`;
 
 export default function Character({menuOpen}: {menuOpen: boolean}) {
   const host = useRef<HTMLDivElement>(null);
+  const loadingLabel = useRef<HTMLParagraphElement>(null);
   const blocked = useRef(menuOpen);
   const [failed, setFailed] = useState(false);
   useEffect(() => {blocked.current = menuOpen;}, [menuOpen]);
@@ -106,10 +107,20 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
     }
 
     const download = new AbortController();
+    const progress = ({loaded, total, attempt}: {loaded: number; total: number; attempt: number}) => {
+      if (!disposed && loadingLabel.current) {
+        loadingLabel.current.textContent = `人物加载中 ${Math.floor(loaded / total * 100)}%${attempt ? ' · 正在重试连接' : ''}`;
+      }
+    };
     const loader = new GLTFLoader();
     const loading = import.meta.env.PROD
-      ? loadModelChunks(new URL(`${import.meta.env.BASE_URL}models/character.json`, window.location.href).href, download.signal)
-        .then(data => { download.signal.throwIfAborted(); return loader.parseAsync(data, ''); })
+      ? loadModelChunks(new URL(`${import.meta.env.BASE_URL}models/character.json`, window.location.href).href, download.signal, progress)
+        .then(data => {
+          download.signal.throwIfAborted();
+          container.dataset.status = 'parsing';
+          if (loadingLabel.current) loadingLabel.current.textContent = '人物加载中 · 正在准备画面';
+          return loader.parseAsync(data, '');
+        })
       : loader.loadAsync(MODEL_URL);
     loading.then(gltf => {
       if (disposed) {release(gltf.scene); return;}
@@ -130,10 +141,12 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
         gltf.animations.forEach(clip => mixer!.clipAction(clip).play());
       }
       container.dataset.status = 'ready';
+      if (loadingLabel.current) loadingLabel.current.hidden = true;
       resize();
     }).catch(error => {
       if (!disposed) {
         container.dataset.status = 'error';
+        if (loadingLabel.current) loadingLabel.current.hidden = true;
         setFailed(true);
         console.error('Unable to load character model', error);
       }
@@ -185,6 +198,7 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
   }, []);
 
   return <div ref={host} className="character-background" data-status="loading" aria-hidden={!failed}>
+    {!failed && <p ref={loadingLabel} className="character-error">人物加载中 · 正在连接</p>}
     {failed && <p className="character-error" role="status">人物模型暂时无法加载，请刷新页面重试。</p>}
   </div>;
 }

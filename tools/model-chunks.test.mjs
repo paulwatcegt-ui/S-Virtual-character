@@ -11,10 +11,12 @@ test('production chunks download and reconstruct the exact source GLB', async ()
   for (const p of manifest.parts) assert.ok(p.size <= 20 * 1024 * 1024);
   assert.ok(!(await readdir('dist/models')).some(name => name.endsWith('.glb')));
   let corrupt = false;
+  let stalled = 0;
   const server = createServer(async (req, res) => {
     try {
       const name = req.url.split('/').pop();
       if (name !== 'character.json' && !manifest.parts.some(p => p.file === name)) { res.writeHead(404).end(); return; }
+      if (name.endsWith('.bin') && stalled > 0) { stalled--; res.writeHead(200); res.write(Buffer.from([0])); return; }
       const data = await readFile(`dist/models/${name}`);
       if (corrupt && name.endsWith('.bin')) data[0] ^= 1;
       res.end(data);
@@ -27,6 +29,12 @@ test('production chunks download and reconstruct the exact source GLB', async ()
     const source = await readFile('public/models/character-rigged.glb');
     const hash = bytes => createHash('sha256').update(bytes).digest('hex');
     assert.equal(hash(Buffer.from(restored)), hash(source));
+    stalled = 1;
+    const progress = [];
+    const recovered = await loadModelChunks(url, undefined, value => progress.push(value), { idleMs: 500 });
+    assert.equal(hash(Buffer.from(recovered)), hash(source));
+    assert.ok(progress.some(p => p.attempt > 0));
+    assert.equal(progress.at(-1).loaded, source.length);
     corrupt = true;
     await assert.rejects(loadModelChunks(url), /checksum mismatch/);
     const controller = new AbortController();
