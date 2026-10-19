@@ -1,16 +1,21 @@
 import React, {useEffect, useRef, useState} from 'react';
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
+import {MODEL_CONFIG} from './model-config.mjs';
+import {prepareCharacter} from './prepare-character.mjs';
 import {FOLLOW_CONFIG, targetAngles} from './character-motion.mjs';
 import {createHeadRig, updateHeadRig} from './character-rig.mjs';
 import {loadModelChunks} from './model-chunks.mjs';
 
-const MODEL_URL = `${import.meta.env.BASE_URL}models/character-rigged.glb`;
+const MODEL_URL = `${import.meta.env.BASE_URL}models/${MODEL_CONFIG.file}`;
 
-export default function Character({menuOpen}: {menuOpen: boolean}) {
+export default function Character({menuOpen, active = true}: {menuOpen: boolean; active?: boolean}) {
   const host = useRef<HTMLDivElement>(null);
   const loadingLabel = useRef<HTMLParagraphElement>(null);
   const blocked = useRef(menuOpen);
+  const isActive = useRef(active);
+  useEffect(() => {isActive.current = active;}, [active]);
   const [failed, setFailed] = useState(false);
   useEffect(() => {blocked.current = menuOpen;}, [menuOpen]);
 
@@ -41,6 +46,8 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
     scene.add(fill);
 
     let model: THREE.Group | undefined;
+    let modelHeight = .843648;
+    let modelBottom = 0;
     let rig: ReturnType<typeof createHeadRig> | undefined;
     let mixer: THREE.AnimationMixer | undefined;
     let target = {yaw: 0, pitch: 0};
@@ -55,23 +62,24 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
       renderer.setSize(width, height, false);
       // Keep the existing full-screen character layer and its right-hand composition.
       // Orthographic framing changes the camera only, never the model's proportions.
-      const viewHeight = 0.88;
+      const viewHeight = modelHeight * MODEL_CONFIG.framing.heightRatio;
       const viewWidth = viewHeight * width / height;
-      const centerX = width < 768 ? 0.65 : 0.70;
+      const centerX = width < 768 ? MODEL_CONFIG.framing.mobileX : MODEL_CONFIG.framing.desktopX;
       const cameraX = -(centerX - 0.5) * viewWidth;
       camera.left = -viewWidth / 2;
       camera.right = viewWidth / 2;
       camera.top = viewHeight / 2;
       camera.bottom = -viewHeight / 2;
-      camera.position.set(cameraX, 0.45, 3);
-      camera.lookAt(cameraX, 0.45, 0);
+      const cameraY = modelBottom + modelHeight * MODEL_CONFIG.framing.centerRatio;
+      camera.position.set(cameraX, cameraY, 3);
+      camera.lookAt(cameraX, cameraY, 0);
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld();
       reset();
     }
 
     const pointer = (event: MouseEvent) => {
-      if (!rig || blocked.current) {
+      if (!rig || blocked.current || !isActive.current) {
         reset();
         return;
       }
@@ -112,7 +120,7 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
         loadingLabel.current.textContent = `人物加载中 ${Math.floor(loaded / total * 100)}%${attempt ? ' · 正在重试连接' : ''}`;
       }
     };
-    const loader = new GLTFLoader();
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
     const loading = import.meta.env.PROD
       ? loadModelChunks(new URL(`${import.meta.env.BASE_URL}models/character.json`, window.location.href).href, download.signal, progress)
         .then(data => {
@@ -121,12 +129,19 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
           if (loadingLabel.current) loadingLabel.current.textContent = '人物加载中 · 正在准备画面';
           return loader.parseAsync(data, '');
         })
-      : loader.loadAsync(MODEL_URL);
+      : fetch(MODEL_URL, {signal: download.signal}).then(async response => {
+          if (!response.ok) throw new Error(`Model HTTP ${response.status}`);
+          return loader.parseAsync(await response.arrayBuffer(), '');
+        });
     loading.then(gltf => {
       if (disposed) {release(gltf.scene); return;}
       model = gltf.scene;
       scene.add(model);
+      prepareCharacter(model);
       model.updateMatrixWorld(true);
+      const bounds = new THREE.Box3().setFromObject(model);
+      modelHeight = bounds.max.y - bounds.min.y;
+      modelBottom = bounds.min.y;
       rig = createHeadRig(model);
       if (!rig) {
         container.dataset.tracking = 'unsupported';
@@ -161,6 +176,7 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
     document.addEventListener('visibilitychange', reset);
     resize();
     renderer.setAnimationLoop(time => {
+      if (!isActive.current) {previousTime = time; return;}
       const delta = Math.max(0, Math.min((time - previousTime) / 1000, FOLLOW_CONFIG.maxFrameDelta));
       previousTime = time;
       if (blocked.current || document.hidden) reset();
@@ -172,7 +188,7 @@ export default function Character({menuOpen}: {menuOpen: boolean}) {
         container.dataset.pitch = THREE.MathUtils.radToDeg(pose.pitch).toFixed(3);
         container.dataset.eyeYaw = THREE.MathUtils.radToDeg(pose.eyeYaw).toFixed(3);
         container.dataset.eyePitch = THREE.MathUtils.radToDeg(pose.eyePitch).toFixed(3);
-        const body = model!.getObjectByName('part_1')!;
+        const body = rig!.body;
         body.getWorldPosition(direction);
         container.dataset.bodyPosition = direction.toArray().join(',');
         container.dataset.bodyQuaternion = body.quaternion.toArray().join(',');

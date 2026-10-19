@@ -4,10 +4,12 @@ import { readFile, readdir } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { loadModelChunks } from '../src/model-chunks.mjs';
+import { MODEL_CONFIG } from '../src/model-config.mjs';
 
 test('production chunks download and reconstruct the exact source GLB', async () => {
   const manifest = JSON.parse(await readFile('dist/models/character.json', 'utf8'));
-  assert.equal(manifest.parts.length, 6);
+  const source = await readFile(`public/models/${MODEL_CONFIG.file}`);
+  assert.equal(manifest.parts.length, Math.ceil(source.length / (20 * 1024 * 1024)));
   for (const p of manifest.parts) assert.ok(p.size <= 20 * 1024 * 1024);
   assert.ok(!(await readdir('dist/models')).some(name => name.endsWith('.glb')));
   let corrupt = false;
@@ -26,7 +28,6 @@ test('production chunks download and reconstruct the exact source GLB', async ()
   try {
     const url = `http://127.0.0.1:${server.address().port}/models/character.json`;
     const restored = await loadModelChunks(url, new AbortController().signal);
-    const source = await readFile('public/models/character-rigged.glb');
     const hash = bytes => createHash('sha256').update(bytes).digest('hex');
     assert.equal(hash(Buffer.from(restored)), hash(source));
     stalled = 1;

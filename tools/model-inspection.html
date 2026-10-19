@@ -3,10 +3,14 @@ import * as THREE from '/node_modules/three/build/three.module.js';
 import {GLTFLoader} from '/node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import {createHeadRig,applyHeadPose} from '/src/character-rig.mjs';
 import {LIMITS} from '/src/character-motion.mjs';
+import {MeshoptDecoder} from '/node_modules/three/examples/jsm/libs/meshopt_decoder.module.js';
+import {MODEL_CONFIG} from '/src/model-config.mjs';
+import {prepareCharacter} from '/src/prepare-character.mjs';
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setScissorTest(true);document.body.append(renderer.domElement);
 const params=new URLSearchParams(location.search);
 const pose=params.get('pose');
-const gltf=await new GLTFLoader().loadAsync(pose?'/models/character-rigged.glb':'/models/character.glb');
+const gltf=await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync('/models/'+MODEL_CONFIG.file);
+if(pose)prepareCharacter(gltf.scene);
 const scenes=[];
 if(pose){
  document.querySelector('#labels').textContent='Neck pivot verification: '+pose;

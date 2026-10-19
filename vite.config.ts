@@ -2,13 +2,14 @@ import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { MODEL_CONFIG } from './src/model-config.mjs';
 
 export default defineConfig({
   plugins: [tailwindcss(), {
     name: 'character-model-chunks',
     apply: 'build',
     generateBundle() {
-      const model = readFileSync(new URL('./public/models/character-rigged.glb', import.meta.url));
+      const model = readFileSync(new URL(`./public/models/${MODEL_CONFIG.file}`, import.meta.url));
       if (model.toString('ascii', 0, 4) !== 'glTF') throw new Error('Missing GLB data. Run git lfs pull before building.');
       const parts = [];
       const chunkSize = 20 * 1024 * 1024;

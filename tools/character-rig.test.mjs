@@ -135,7 +135,7 @@ test('head/neck step response is independent of display refresh rate', () => {
     applyHeadPose(rig, 0, 0);
     let pose;
     for (let i = 0; i < fps / 2; i++) pose = updateHeadRig(rig, {yaw: LIMITS.yaw, pitch: LIMITS.pitch}, 1 / fps);
-    return pose;
+    return {...pose};
   };
   const low = simulate(30), high = simulate(144);
   // Quaternion.slerp uses a normalized linear fallback for very small angles.

@@ -10,3 +10,5 @@ tools/__pycache__/
 .env
 .env.local
 .env.*.local
+.local-tools/
+接手记录.md

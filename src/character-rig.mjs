@@ -1,20 +1,21 @@
 import {Euler, MathUtils, Quaternion} from 'three';
 import {FOLLOW_CONFIG, LIMITS, dampingAlpha} from './character-motion.mjs';
+import {MODEL_CONFIG} from './model-config.mjs';
 
 const IDENTITY = new Quaternion();
 
 export function createHeadRig(model) {
-  const names = ['CharacterRigRoot', 'Neck', 'Head', 'Eye_L', 'Eye_R'];
+  const names = MODEL_CONFIG.bones;
   const [root, neck, head, leftEye, rightEye] = names.map(name => model.getObjectByName(name));
-  const body = model.getObjectByName('part_1');
+  const body = model.getObjectByName(MODEL_CONFIG.nodes.body);
   if (![root, neck, head, leftEye, rightEye].every(bone => bone?.isBone) || !body) return null;
-  const surfaces = ['part_0', 'part_2', 'part_3'].map(name => model.getObjectByName(name));
+  const surfaces = [MODEL_CONFIG.nodes.head, ...MODEL_CONFIG.nodes.eyes].map(name => model.getObjectByName(name));
   if (!surfaces.every(mesh => mesh?.isSkinnedMesh)) return null;
   surfaces.forEach(mesh => {mesh.frustumCulled = false;});
   // The +90 degree X import basis maps local -Z to world up.
   const frame = root.quaternion.clone().normalize();
   return {model, root, neck, head, eyes: [leftEye, rightEye], surfaces, body,
-    frame, inverseFrame: frame.clone().invert(),
+    frame, inverseFrame: frame.clone().invert(), pose: {yaw: 0, pitch: 0, eyeYaw: 0, eyePitch: 0},
     scratch: {full: new Quaternion(), fraction: new Quaternion(), local: new Quaternion(),
       headWorld: new Quaternion(), gaze: new Quaternion(), relative: new Quaternion(),
       euler: new Euler(0, 0, 0, 'YXZ')}};
@@ -57,8 +58,12 @@ export function updateHeadRig(rig, target, delta, active = true) {
   toLocal(rig, full, local);
   rig.eyes.forEach(eye => eye.quaternion.slerp(local, dampingAlpha(delta, tau.eyes)).normalize());
   euler.setFromQuaternion(headWorld, 'YXZ');
-  const pose = {yaw: euler.y, pitch: euler.x};
+  const pose = rig.pose;
+  pose.yaw = euler.y;
+  pose.pitch = euler.x;
   relative.copy(rig.frame).multiply(rig.eyes[0].quaternion).multiply(rig.inverseFrame);
   euler.setFromQuaternion(relative, 'YXZ');
-  return {...pose, eyeYaw: euler.y, eyePitch: euler.x};
+  pose.eyeYaw = euler.y;
+  pose.eyePitch = euler.x;
+  return pose;
 }
