@@ -12,3 +12,23 @@ tools/__pycache__/
 .env.*.local
 .local-tools/
 接手记录.md
+
+# Environment secrets; keep sanitized example templates shareable.
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Local caches, test output and editor/OS temporary files.
+.vite/
+.cache/
+coverage/
+*.tsbuildinfo
+*.tmp
+*.temp
+*.bak
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
